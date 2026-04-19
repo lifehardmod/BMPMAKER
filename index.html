@@ -1,0 +1,888 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Local BMP Tool</title>
+    <style>
+      :root {
+        --bg: #ffffff;
+        --panel: #ffffff;
+        --ink: #1a1a1a;
+        --muted: #6b7280;
+        --line: rgba(0, 0, 0, 0.08);
+        --shadow:
+          0 1px 3px rgba(0, 0, 0, 0.06), 0 12px 32px rgba(0, 0, 0, 0.04);
+        --accent: #4b5563;
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      html {
+        margin: 0;
+        overflow-x: clip;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        min-height: 100dvh;
+        padding: 24px 16px;
+        box-sizing: border-box;
+        font-family: "Segoe UI", "Apple SD Gothic Neo", sans-serif;
+        color: var(--ink);
+        background: var(--bg);
+      }
+
+      .shell {
+        width: min(1120px, calc(100% - 32px));
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: 340px minmax(0, 1fr);
+        gap: 18px;
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        box-shadow: var(--shadow);
+      }
+
+      .controls {
+        padding: 24px;
+      }
+
+      .eyebrow {
+        margin: 0 0 10px;
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(28px, 5vw, 40px);
+        line-height: 1.02;
+        letter-spacing: -0.04em;
+      }
+
+      .lead {
+        margin: 14px 0 20px;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+
+      .palette-block {
+        margin-top: 8px;
+        padding: 14px;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: #fafafa;
+      }
+
+      .palette-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 10px;
+      }
+
+      .palette-title {
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .palette-preview {
+        width: 36px;
+        height: 36px;
+        border-radius: 12px;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.4);
+      }
+
+      .palette-canvas-wrap {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        border-radius: 16px;
+        overflow: hidden;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        background: #fff;
+        cursor: crosshair;
+      }
+
+      .palette-canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+
+      .palette-marker {
+        position: absolute;
+        width: 14px;
+        height: 14px;
+        margin-left: -7px;
+        margin-top: -7px;
+        border: 2px solid #fff;
+        border-radius: 50%;
+        box-shadow:
+          0 0 0 1px rgba(0, 0, 0, 0.28),
+          0 2px 6px rgba(0, 0, 0, 0.18);
+        pointer-events: none;
+      }
+
+      .hue-row {
+        margin-top: 12px;
+      }
+
+      .hue-slider {
+        width: 100%;
+        height: 14px;
+        border-radius: 999px;
+        appearance: none;
+        outline: none;
+        background: linear-gradient(
+          90deg,
+          rgb(255, 0, 0) 0%,
+          rgb(255, 255, 0) 17%,
+          rgb(0, 255, 0) 33%,
+          rgb(0, 255, 255) 50%,
+          rgb(0, 0, 255) 67%,
+          rgb(255, 0, 255) 83%,
+          rgb(255, 0, 0) 100%
+        );
+      }
+
+      .hue-slider::-webkit-slider-thumb {
+        appearance: none;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        border: 2px solid #fff;
+        background: #1c2330;
+        box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2);
+        cursor: pointer;
+      }
+
+      .actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 24px;
+      }
+
+      button {
+        appearance: none;
+        border: 0;
+        border-radius: 999px;
+        padding: 14px 18px;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+        transition:
+          transform 140ms ease,
+          opacity 140ms ease,
+          box-shadow 140ms ease;
+      }
+
+      button:hover:not(:disabled) {
+        transform: translateY(-1px);
+      }
+      button:disabled {
+        opacity: 0.45;
+        cursor: wait;
+      }
+
+      .primary {
+        background: var(--ink);
+        color: #ffffff;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+      }
+
+      .secondary {
+        background: #ffffff;
+        color: var(--ink);
+        border: 1px solid var(--line);
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+      }
+
+      .meta {
+        margin-top: 22px;
+        padding-top: 18px;
+        border-top: 1px solid var(--line);
+        font-size: 13px;
+        color: var(--muted);
+        line-height: 1.7;
+      }
+
+      .preview {
+        position: relative;
+        overflow: hidden;
+        padding: 24px;
+        min-height: 420px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .preview::before,
+      .preview::after {
+        content: "";
+        position: absolute;
+        border-radius: 999px;
+        filter: blur(8px);
+        opacity: 0.5;
+        pointer-events: none;
+      }
+
+      .preview::before {
+        width: 220px;
+        height: 220px;
+        right: -40px;
+        top: -60px;
+        background: rgba(255, 255, 255, 0.9);
+      }
+
+      .preview::after {
+        width: 280px;
+        height: 280px;
+        left: -90px;
+        bottom: -120px;
+        background: rgba(243, 244, 246, 0.8);
+      }
+
+      .preview-bar {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .preview-label {
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .chip {
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: #ffffff;
+        border: 1px solid var(--line);
+        font-size: 13px;
+        color: var(--ink);
+      }
+
+      .canvas-wrap {
+        position: relative;
+        z-index: 1;
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        border-radius: 22px;
+        background:
+          repeating-linear-gradient(
+            45deg,
+            rgba(0, 0, 0, 0.025) 0,
+            rgba(0, 0, 0, 0.025) 12px,
+            rgba(255, 255, 255, 0.65) 12px,
+            rgba(255, 255, 255, 0.65) 24px
+          ),
+          #fafafa;
+        border: 1px solid var(--line);
+      }
+
+      canvas.preview-canvas {
+        width: min(100%, 896px);
+        height: auto;
+        image-rendering: pixelated;
+        border-radius: 14px;
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+        background: #ffffff;
+      }
+
+      .status {
+        position: relative;
+        z-index: 1;
+        min-height: 24px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      @media (max-width: 900px) {
+        .shell {
+          grid-template-columns: 1fr;
+        }
+        .preview {
+          min-height: auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <section class="panel controls">
+        <div class="palette-block">
+          <div class="palette-head">
+            <span class="palette-title">Color Palette</span>
+            <div id="palettePreview" class="palette-preview"></div>
+          </div>
+          <div id="paletteWrap" class="palette-canvas-wrap">
+            <canvas
+              id="paletteCanvas"
+              class="palette-canvas"
+              width="280"
+              height="280"
+            ></canvas>
+            <div id="paletteMarker" class="palette-marker"></div>
+          </div>
+          <div class="hue-row">
+            <input
+              id="hueSlider"
+              class="hue-slider"
+              type="range"
+              min="0"
+              max="360"
+              value="357"
+            />
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="downloadBtn" class="primary" disabled>
+            BMP 다운로드
+          </button>
+          <button id="resetBtn" class="secondary" type="button">
+            샘플 색으로 복원
+          </button>
+        </div>
+
+        <div class="meta">
+          <div>템플릿: <code>회색.bmp</code></div>
+          <div>출력 크기: <code>896 x 128</code></div>
+          <div>형식: <code>BMP / 24-bit / uncompressed</code></div>
+        </div>
+      </section>
+
+      <section class="panel preview">
+        <div class="preview-bar">
+          <div class="preview-label">Preview</div>
+          <div class="chip" id="chipLabel">#FE1002</div>
+        </div>
+        <div class="canvas-wrap">
+          <canvas
+            id="previewCanvas"
+            class="preview-canvas"
+            width="896"
+            height="128"
+          ></canvas>
+        </div>
+        <div id="status" class="status">샘플 BMP를 불러오는 중입니다...</div>
+      </section>
+    </main>
+
+    <script>
+      const SAMPLE_FILES = [
+        "노랑.bmp",
+        "라임.bmp",
+        "보라.bmp",
+        "빨강.bmp",
+        "옥색.bmp",
+        "주황.bmp",
+        "초록.bmp",
+        "파랑.bmp",
+        "회색.bmp",
+      ];
+
+      const DEFAULT_COLOR = "#FE1002";
+      const TEMPLATE_FILE = "회색.bmp";
+
+      const downloadBtn = document.getElementById("downloadBtn");
+      const resetBtn = document.getElementById("resetBtn");
+      const status = document.getElementById("status");
+      const chipLabel = document.getElementById("chipLabel");
+      const canvas = document.getElementById("previewCanvas");
+      const ctx = canvas.getContext("2d");
+      const paletteCanvas = document.getElementById("paletteCanvas");
+      const paletteCtx = paletteCanvas.getContext("2d");
+      const paletteWrap = document.getElementById("paletteWrap");
+      const paletteMarker = document.getElementById("paletteMarker");
+      const palettePreview = document.getElementById("palettePreview");
+      const hueSlider = document.getElementById("hueSlider");
+
+      const state = {
+        templateImageData: null,
+        templateBmpBytes: null,
+        maskIndices: [],
+        brightnessFactors: [],
+        templateBackground: [128, 128, 128],
+        currentHex: DEFAULT_COLOR,
+        paletteHue: 357,
+        paletteSaturation: 0.9921,
+        paletteValue: 0.9961,
+      };
+
+      bindPalette();
+
+      hueSlider.addEventListener("input", () => {
+        state.paletteHue = Number(hueSlider.value);
+        drawPalette();
+        applyPaletteSelection();
+      });
+
+      downloadBtn.addEventListener("click", () => {
+        if (!state.templateImageData) {
+          return;
+        }
+        const imageData = renderCurrentImageData();
+        const blob = imageDataToBmpBlob(imageData);
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "custom-color.bmp";
+        link.click();
+        URL.revokeObjectURL(url);
+      });
+
+      resetBtn.addEventListener("click", () => {
+        setColor(DEFAULT_COLOR);
+      });
+
+      initialize().catch((error) => {
+        console.error(error);
+        status.textContent =
+          "샘플 BMP를 읽지 못했습니다. HTML 파일과 BMP 파일이 같은 폴더에 있는지 확인해 주세요.";
+      });
+
+      async function initialize() {
+        const [images, templateBmpBytes] = await Promise.all([
+          Promise.all(SAMPLE_FILES.map(loadImageElement)),
+          loadBinaryFile(TEMPLATE_FILE),
+        ]);
+        const canvases = images.map((bitmap) => bitmapToCanvas(bitmap));
+        const imageDataList = canvases.map((item) =>
+          item.ctx.getImageData(0, 0, item.canvas.width, item.canvas.height),
+        );
+        const templateIndex = SAMPLE_FILES.indexOf(TEMPLATE_FILE);
+        const template = imageDataList[templateIndex];
+        state.templateBmpBytes = templateBmpBytes;
+
+        state.templateImageData = new ImageData(
+          new Uint8ClampedArray(template.data),
+          template.width,
+          template.height,
+        );
+
+        const centerOffset =
+          (((template.height / 2) | 0) * template.width +
+            ((template.width / 2) | 0)) *
+          4;
+        state.templateBackground = [
+          template.data[centerOffset],
+          template.data[centerOffset + 1],
+          template.data[centerOffset + 2],
+        ];
+
+        deriveMask(imageDataList);
+        drawPalette();
+        setColor(DEFAULT_COLOR);
+        downloadBtn.disabled = false;
+        status.textContent =
+          "준비되었습니다. 팔레트에서 색을 고르면 바로 미리보기가 바뀝니다.";
+      }
+
+      function deriveMask(imageDataList) {
+        const width = state.templateImageData.width;
+        const height = state.templateImageData.height;
+        const template = state.templateImageData.data;
+        const baseLuma =
+          luminance(
+            state.templateBackground[0],
+            state.templateBackground[1],
+            state.templateBackground[2],
+          ) || 1;
+        const candidateMask = new Uint8Array(width * height);
+        const visited = new Uint8Array(width * height);
+        const queue = [];
+
+        for (let y = 0; y < height; y += 1) {
+          for (let x = 0; x < width; x += 1) {
+            const offset = (y * width + x) * 4;
+            const firstR = imageDataList[0].data[offset];
+            const firstG = imageDataList[0].data[offset + 1];
+            const firstB = imageDataList[0].data[offset + 2];
+            let same = true;
+
+            for (let i = 1; i < imageDataList.length; i += 1) {
+              const data = imageDataList[i].data;
+              if (
+                data[offset] !== firstR ||
+                data[offset + 1] !== firstG ||
+                data[offset + 2] !== firstB
+              ) {
+                same = false;
+                break;
+              }
+            }
+
+            if (!same) {
+              candidateMask[y * width + x] = 1;
+            }
+          }
+        }
+
+        for (let x = 0; x < width; x += 1) {
+          if (candidateMask[x] === 1) {
+            queue.push(x);
+            visited[x] = 1;
+          }
+        }
+
+        while (queue.length > 0) {
+          const index = queue.shift();
+          const x = index % width;
+          const y = (index / width) | 0;
+          const offset = index * 4;
+
+          state.maskIndices.push(offset);
+          state.brightnessFactors.push(
+            luminance(
+              template[offset],
+              template[offset + 1],
+              template[offset + 2],
+            ) / baseLuma,
+          );
+
+          const neighbors = [
+            index - 1,
+            index + 1,
+            index - width,
+            index + width,
+          ];
+          for (const next of neighbors) {
+            if (next < 0 || next >= candidateMask.length) {
+              continue;
+            }
+            const nextX = next % width;
+            const nextY = (next / width) | 0;
+            if (Math.abs(nextX - x) + Math.abs(nextY - y) !== 1) {
+              continue;
+            }
+            if (visited[next] === 1 || candidateMask[next] !== 1) {
+              continue;
+            }
+            visited[next] = 1;
+            queue.push(next);
+          }
+        }
+      }
+
+      function renderCurrentImageData() {
+        const [r, g, b] = hexToRgb(state.currentHex);
+        const imageData = new ImageData(
+          new Uint8ClampedArray(state.templateImageData.data),
+          state.templateImageData.width,
+          state.templateImageData.height,
+        );
+
+        for (let i = 0; i < state.maskIndices.length; i += 1) {
+          const offset = state.maskIndices[i];
+          const factor = state.brightnessFactors[i];
+          imageData.data[offset] = clamp255(r * factor);
+          imageData.data[offset + 1] = clamp255(g * factor);
+          imageData.data[offset + 2] = clamp255(b * factor);
+        }
+
+        return imageData;
+      }
+
+      function redraw() {
+        if (!state.templateImageData) {
+          return;
+        }
+        const imageData = renderCurrentImageData();
+        ctx.putImageData(imageData, 0, 0);
+        chipLabel.textContent = state.currentHex;
+        palettePreview.style.background = state.currentHex;
+      }
+
+      function setColor(hex) {
+        const normalized = normalizeHex(hex);
+        if (!normalized) {
+          return;
+        }
+        state.currentHex = normalized;
+        syncPaletteFromHex(normalized);
+        redraw();
+      }
+
+      function bindPalette() {
+        const handlePointer = (clientX, clientY) => {
+          const rect = paletteCanvas.getBoundingClientRect();
+          const x = Math.max(0, Math.min(rect.width, clientX - rect.left));
+          const y = Math.max(0, Math.min(rect.height, clientY - rect.top));
+          state.paletteSaturation = rect.width === 0 ? 0 : x / rect.width;
+          state.paletteValue = rect.height === 0 ? 0 : 1 - y / rect.height;
+          updatePaletteMarker();
+          applyPaletteSelection();
+        };
+
+        let dragging = false;
+
+        paletteWrap.addEventListener("pointerdown", (event) => {
+          dragging = true;
+          paletteWrap.setPointerCapture(event.pointerId);
+          handlePointer(event.clientX, event.clientY);
+        });
+
+        paletteWrap.addEventListener("pointermove", (event) => {
+          if (!dragging) {
+            return;
+          }
+          handlePointer(event.clientX, event.clientY);
+        });
+
+        const stopDragging = (event) => {
+          if (!dragging) {
+            return;
+          }
+          dragging = false;
+          if (event.pointerId !== undefined) {
+            paletteWrap.releasePointerCapture(event.pointerId);
+          }
+        };
+
+        paletteWrap.addEventListener("pointerup", stopDragging);
+        paletteWrap.addEventListener("pointercancel", stopDragging);
+      }
+
+      function drawPalette() {
+        const width = paletteCanvas.width;
+        const height = paletteCanvas.height;
+        const hueHex = rgbToHex(...hsvToRgb(state.paletteHue, 1, 1));
+
+        paletteCtx.clearRect(0, 0, width, height);
+        paletteCtx.fillStyle = hueHex;
+        paletteCtx.fillRect(0, 0, width, height);
+
+        const whiteGradient = paletteCtx.createLinearGradient(0, 0, width, 0);
+        whiteGradient.addColorStop(0, "#ffffff");
+        whiteGradient.addColorStop(1, "rgba(255,255,255,0)");
+        paletteCtx.fillStyle = whiteGradient;
+        paletteCtx.fillRect(0, 0, width, height);
+
+        const blackGradient = paletteCtx.createLinearGradient(0, 0, 0, height);
+        blackGradient.addColorStop(0, "rgba(0,0,0,0)");
+        blackGradient.addColorStop(1, "#000000");
+        paletteCtx.fillStyle = blackGradient;
+        paletteCtx.fillRect(0, 0, width, height);
+
+        updatePaletteMarker();
+      }
+
+      function updatePaletteMarker() {
+        paletteMarker.style.left = `${state.paletteSaturation * 100}%`;
+        paletteMarker.style.top = `${(1 - state.paletteValue) * 100}%`;
+      }
+
+      function applyPaletteSelection() {
+        const [r, g, b] = hsvToRgb(
+          state.paletteHue,
+          state.paletteSaturation,
+          state.paletteValue,
+        );
+        state.currentHex = rgbToHex(r, g, b);
+        redraw();
+      }
+
+      function syncPaletteFromHex(hex) {
+        const [r, g, b] = hexToRgb(hex);
+        const [h, s, v] = rgbToHsv(r, g, b);
+        state.paletteHue = h;
+        state.paletteSaturation = s;
+        state.paletteValue = v;
+        hueSlider.value = String(Math.round(h));
+        drawPalette();
+      }
+
+      function normalizeHex(value) {
+        const match = String(value)
+          .trim()
+          .match(/^#?([0-9a-fA-F]{6})$/);
+        return match ? `#${match[1].toUpperCase()}` : null;
+      }
+
+      function hexToRgb(hex) {
+        const normalized = normalizeHex(hex).slice(1);
+        return [
+          parseInt(normalized.slice(0, 2), 16),
+          parseInt(normalized.slice(2, 4), 16),
+          parseInt(normalized.slice(4, 6), 16),
+        ];
+      }
+
+      function rgbToHex(r, g, b) {
+        return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+      }
+
+      function hsvToRgb(h, s, v) {
+        const hue = ((Number(h) % 360) + 360) % 360;
+        const c = v * s;
+        const x = c * (1 - Math.abs(((hue / 60) % 2) - 1));
+        const m = v - c;
+        let r1 = 0;
+        let g1 = 0;
+        let b1 = 0;
+
+        if (hue < 60) {
+          r1 = c;
+          g1 = x;
+          b1 = 0;
+        } else if (hue < 120) {
+          r1 = x;
+          g1 = c;
+          b1 = 0;
+        } else if (hue < 180) {
+          r1 = 0;
+          g1 = c;
+          b1 = x;
+        } else if (hue < 240) {
+          r1 = 0;
+          g1 = x;
+          b1 = c;
+        } else if (hue < 300) {
+          r1 = x;
+          g1 = 0;
+          b1 = c;
+        } else {
+          r1 = c;
+          g1 = 0;
+          b1 = x;
+        }
+
+        return [
+          clamp255((r1 + m) * 255),
+          clamp255((g1 + m) * 255),
+          clamp255((b1 + m) * 255),
+        ];
+      }
+
+      function rgbToHsv(r, g, b) {
+        const rn = r / 255;
+        const gn = g / 255;
+        const bn = b / 255;
+        const max = Math.max(rn, gn, bn);
+        const min = Math.min(rn, gn, bn);
+        const delta = max - min;
+        let h = 0;
+
+        if (delta !== 0) {
+          if (max === rn) {
+            h = 60 * (((gn - bn) / delta) % 6);
+          } else if (max === gn) {
+            h = 60 * ((bn - rn) / delta + 2);
+          } else {
+            h = 60 * ((rn - gn) / delta + 4);
+          }
+        }
+
+        if (h < 0) {
+          h += 360;
+        }
+
+        const s = max === 0 ? 0 : delta / max;
+        const v = max;
+        return [h, s, v];
+      }
+
+      function toHex(value) {
+        return clamp255(value).toString(16).padStart(2, "0").toUpperCase();
+      }
+
+      function clamp255(value) {
+        return Math.max(0, Math.min(255, Math.round(value)));
+      }
+
+      function luminance(r, g, b) {
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      }
+
+      function bitmapToCanvas(bitmap) {
+        const workCanvas = document.createElement("canvas");
+        workCanvas.width = bitmap.width;
+        workCanvas.height = bitmap.height;
+        const workCtx = workCanvas.getContext("2d");
+        workCtx.drawImage(bitmap, 0, 0);
+        return { canvas: workCanvas, ctx: workCtx };
+      }
+
+      function loadImageElement(fileName) {
+        return new Promise((resolve, reject) => {
+          const image = new Image();
+          image.onload = () => resolve(image);
+          image.onerror = () => reject(new Error(`Failed to load ${fileName}`));
+          image.src = encodeURI(fileName);
+        });
+      }
+
+      async function loadBinaryFile(fileName) {
+        const response = await fetch(encodeURI(fileName));
+        if (!response.ok) {
+          throw new Error(`Failed to load ${fileName}`);
+        }
+        return new Uint8Array(await response.arrayBuffer());
+      }
+
+      function imageDataToBmpBlob(imageData) {
+        if (!state.templateBmpBytes) {
+          throw new Error("Template BMP bytes are not loaded");
+        }
+
+        const width = imageData.width;
+        const height = imageData.height;
+        const bytes = new Uint8Array(state.templateBmpBytes);
+        const view = new DataView(
+          bytes.buffer,
+          bytes.byteOffset,
+          bytes.byteLength,
+        );
+        const pixelDataOffset = view.getUint32(10, true);
+        const rowStride = width * 3;
+        const paddedRowStride = (rowStride + 3) & ~3;
+
+        let writeOffset = pixelDataOffset;
+        for (let y = height - 1; y >= 0; y -= 1) {
+          const rowStart = y * width * 4;
+          for (let x = 0; x < width; x += 1) {
+            const pixelOffset = rowStart + x * 4;
+            bytes[writeOffset] = imageData.data[pixelOffset + 2];
+            bytes[writeOffset + 1] = imageData.data[pixelOffset + 1];
+            bytes[writeOffset + 2] = imageData.data[pixelOffset];
+            writeOffset += 3;
+          }
+          while ((writeOffset - pixelDataOffset) % paddedRowStride !== 0) {
+            writeOffset += 1;
+          }
+        }
+
+        return new Blob([bytes], { type: "image/bmp" });
+      }
+    </script>
+  </body>
+</html>
