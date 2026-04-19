@@ -374,7 +374,7 @@
         </div>
 
         <div class="meta">
-          <div>템플릿: <code>회색.bmp</code></div>
+          <div>템플릿: <code>hair-edge-cleanup.bmp</code></div>
           <div>출력 크기: <code>896 x 128</code></div>
           <div>형식: <code>BMP / 24-bit / uncompressed</code></div>
         </div>
@@ -398,20 +398,8 @@
     </main>
 
     <script>
-      const SAMPLE_FILES = [
-        "노랑.bmp",
-        "라임.bmp",
-        "보라.bmp",
-        "빨강.bmp",
-        "옥색.bmp",
-        "주황.bmp",
-        "초록.bmp",
-        "파랑.bmp",
-        "회색.bmp",
-      ];
-
       const DEFAULT_COLOR = "#FE1002";
-      const TEMPLATE_FILE = "회색.bmp";
+      const TEMPLATE_FILE = "hair-edge-cleanup.bmp";
 
       const downloadBtn = document.getElementById("downloadBtn");
       const resetBtn = document.getElementById("resetBtn");
@@ -467,20 +455,22 @@
       initialize().catch((error) => {
         console.error(error);
         status.textContent =
-          "샘플 BMP를 읽지 못했습니다. HTML 파일과 BMP 파일이 같은 폴더에 있는지 확인해 주세요.";
+          "템플릿 BMP를 읽지 못했습니다. HTML 파일과 hair-edge-cleanup.bmp 파일이 같은 폴더에 있는지 확인해 주세요.";
       });
 
       async function initialize() {
-        const [images, templateBmpBytes] = await Promise.all([
-          Promise.all(SAMPLE_FILES.map(loadImageElement)),
+        const [templateImage, templateBmpBytes] = await Promise.all([
+          loadImageElement(TEMPLATE_FILE),
           loadBinaryFile(TEMPLATE_FILE),
         ]);
-        const canvases = images.map((bitmap) => bitmapToCanvas(bitmap));
-        const imageDataList = canvases.map((item) =>
-          item.ctx.getImageData(0, 0, item.canvas.width, item.canvas.height),
+        const { canvas: templateCanvas, ctx: templateCtx } =
+          bitmapToCanvas(templateImage);
+        const template = templateCtx.getImageData(
+          0,
+          0,
+          templateCanvas.width,
+          templateCanvas.height,
         );
-        const templateIndex = SAMPLE_FILES.indexOf(TEMPLATE_FILE);
-        const template = imageDataList[templateIndex];
         state.templateBmpBytes = templateBmpBytes;
 
         state.templateImageData = new ImageData(
@@ -499,7 +489,7 @@
           template.data[centerOffset + 2],
         ];
 
-        deriveMask(imageDataList);
+        deriveMask(template);
         drawPalette();
         setColor(DEFAULT_COLOR);
         downloadBtn.disabled = false;
@@ -507,89 +497,33 @@
           "준비되었습니다. 팔레트에서 색을 고르면 바로 미리보기가 바뀝니다.";
       }
 
-      function deriveMask(imageDataList) {
-        const width = state.templateImageData.width;
-        const height = state.templateImageData.height;
-        const template = state.templateImageData.data;
+      function deriveMask(templateImageData) {
+        const width = templateImageData.width;
+        const height = templateImageData.height;
+        const template = templateImageData.data;
         const baseLuma =
           luminance(
             state.templateBackground[0],
             state.templateBackground[1],
             state.templateBackground[2],
           ) || 1;
-        const candidateMask = new Uint8Array(width * height);
-        const visited = new Uint8Array(width * height);
-        const queue = [];
+        state.maskIndices = [];
+        state.brightnessFactors = [];
 
-        for (let y = 0; y < height; y += 1) {
-          for (let x = 0; x < width; x += 1) {
-            const offset = (y * width + x) * 4;
-            const firstR = imageDataList[0].data[offset];
-            const firstG = imageDataList[0].data[offset + 1];
-            const firstB = imageDataList[0].data[offset + 2];
-            let same = true;
-
-            for (let i = 1; i < imageDataList.length; i += 1) {
-              const data = imageDataList[i].data;
-              if (
-                data[offset] !== firstR ||
-                data[offset + 1] !== firstG ||
-                data[offset + 2] !== firstB
-              ) {
-                same = false;
-                break;
-              }
-            }
-
-            if (!same) {
-              candidateMask[y * width + x] = 1;
-            }
-          }
-        }
-
-        for (let x = 0; x < width; x += 1) {
-          if (candidateMask[x] === 1) {
-            queue.push(x);
-            visited[x] = 1;
-          }
-        }
-
-        while (queue.length > 0) {
-          const index = queue.shift();
-          const x = index % width;
-          const y = (index / width) | 0;
+        for (let index = 0; index < width * height; index += 1) {
           const offset = index * 4;
-
-          state.maskIndices.push(offset);
-          state.brightnessFactors.push(
-            luminance(
-              template[offset],
-              template[offset + 1],
-              template[offset + 2],
-            ) / baseLuma,
-          );
-
-          const neighbors = [
-            index - 1,
-            index + 1,
-            index - width,
-            index + width,
-          ];
-          for (const next of neighbors) {
-            if (next < 0 || next >= candidateMask.length) {
-              continue;
-            }
-            const nextX = next % width;
-            const nextY = (next / width) | 0;
-            if (Math.abs(nextX - x) + Math.abs(nextY - y) !== 1) {
-              continue;
-            }
-            if (visited[next] === 1 || candidateMask[next] !== 1) {
-              continue;
-            }
-            visited[next] = 1;
-            queue.push(next);
+          const r = template[offset];
+          const g = template[offset + 1];
+          const b = template[offset + 2];
+          if (
+            r === state.templateBackground[0] &&
+            g === state.templateBackground[1] &&
+            b === state.templateBackground[2]
+          ) {
+            continue;
           }
+          state.maskIndices.push(offset);
+          state.brightnessFactors.push(luminance(r, g, b) / baseLuma);
         }
       }
 
